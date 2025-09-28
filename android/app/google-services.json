@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "577521498411",
+    "project_id": "hikayaheroes-a586a",
+    "storage_bucket": "hikayaheroes-a586a.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:577521498411:android:388c5d3893a7f10767ed6e",
+        "android_client_info": {
+          "package_name": "com.raiservices.hikaya_heroes"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBdD8KIFyCbjIQJA8IUUS0RimcQTSkp9NA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
