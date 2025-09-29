@@ -1,4 +1,3 @@
-// widgets/story_card.dart
 import 'package:flutter/material.dart';
 import 'package:hikaya_heroes/models/story.dart';
 import 'package:hikaya_heroes/utils/constants.dart';
@@ -7,96 +6,241 @@ class StoryCard extends StatelessWidget {
   final Story story;
   final bool gender;
   final VoidCallback onTap;
+  final bool showBookmarkIcon;
+  final Function(bool) onBookmarkTap;
+  final bool isBookmarked;
 
   const StoryCard({
     super.key,
     required this.story,
     required this.gender,
-    required this.onTap, required bool showBookmarkIcon,
+    required this.onTap,
+    required this.showBookmarkIcon,
+    required this.onBookmarkTap,
+    this.isBookmarked = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
+    return GestureDetector(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Stack(
-        children: [
-          Container(
-            child: gender?Image.asset('assets/images/boy.png'):Image.asset('assets/images/girl.png'),
-          ),
-           Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Container(
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 8,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Stack(
+          children: [
+            // Background Image with Gradient Overlay
+            ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: Stack(
+                children: [
+                  // Background Character Image
+                  Image.asset(
+                    gender ? 'assets/images/boy.png' : 'assets/images/girl.png',
+                    width: double.infinity,
+                    height: double.infinity,
+                    fit: BoxFit.cover,
+                  ),
 
+                  // Gradient Overlay for better text readability
+                  Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.transparent,
+                          Colors.black.withOpacity(0.7),
+                        ],
+                        stops: const [0.5, 1.0],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // Content Overlay
+            Positioned(
+              bottom: 0,
+              left: 0,
+              right: 0,
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  borderRadius: const BorderRadius.only(
+                    bottomLeft: Radius.circular(16),
+                    bottomRight: Radius.circular(16),
+                  ),
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.transparent,
+                      Colors.black.withOpacity(0.9),
+                    ],
+                  ),
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    // Story title
+                    // Story Title
+                    Text(
+                      story.title,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                        fontFamily: 'Tajawal',
+                        height: 1.3,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.right,
+                    ),
+                    const SizedBox(height: 8),
+
+                    // Story Details Row
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Card(
-                         // margin: EdgeInsets.all(6),
+                        // Category Badge
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Constants.kPrimaryColor.withOpacity(0.9),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
                           child: Text(
-                            story.title,
-                            style: TextStyle(
-                              fontSize: 18,
+                            story.theme,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
                               fontWeight: FontWeight.bold,
-                              color: Constants.kBlack,
                               fontFamily: 'Tajawal',
                             ),
                           ),
                         ),
+
+                        // Difficulty Indicator (if available)
+                        if (story.difficulty != null) _buildDifficultyIndicator(story.difficulty!),
                       ],
-                    ),
-                    const SizedBox(height: 8),
-                    // Story description
-                    Text(
-                      story.description,
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: Constants.kGray,
-                        fontFamily: 'Tajawal',
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 12),
-                    // Story details
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        // Category
-                        Card(
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: Constants.kPrimaryColor.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                            child: Text(
-                              story.theme,
-                              style: TextStyle(
-                                color: Constants.kPrimaryColor,
-                                fontSize: 14,
-                                fontWeight: FontWeight.bold,
-                                fontFamily: 'Tajawal',
-                              ),
-                            ),
-                          ),
-                        ),
-                        // Difficulty
-                       ],
                     ),
                   ],
                 ),
               ),
             ),
 
-        ],
+            // Bookmark Icon
+            if (showBookmarkIcon)
+              Positioned(
+                top: 8,
+                right: 8,
+                child: GestureDetector(
+                  onTap: () => onBookmarkTap(!isBookmarked),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 300),
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.95),
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.2),
+                          blurRadius: 4,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Icon(
+                      isBookmarked ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
+                      color: isBookmarked ? Constants.kSecondaryColor : Colors.grey[600],
+                      size: 20,
+                    ),
+                  ),
+                ),
+              ),
+
+            // New Badge for Recent Stories (Optional)
+            if (_isNewStory(story.createdAt))
+              Positioned(
+                top: 8,
+                left: 8,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.green,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Text(
+                    'جديد',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      fontFamily: 'Tajawal',
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
     );
+  }
+
+  Widget _buildDifficultyIndicator(String difficulty) {
+    Color difficultyColor;
+    String difficultyText;
+
+    switch (difficulty.toLowerCase()) {
+      case 'easy':
+        difficultyColor = Colors.green;
+        difficultyText = 'سهل';
+        break;
+      case 'medium':
+        difficultyColor = Colors.orange;
+        difficultyText = 'متوسط';
+        break;
+      case 'hard':
+        difficultyColor = Colors.red;
+        difficultyText = 'صعب';
+        break;
+      default:
+        difficultyColor = Colors.grey;
+        difficultyText = difficulty;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: difficultyColor.withOpacity(0.9),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(
+        difficultyText,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 10,
+          fontWeight: FontWeight.bold,
+          fontFamily: 'Tajawal',
+        ),
+      ),
+    );
+  }
+
+  bool _isNewStory(DateTime? createdAt) {
+    if (createdAt == null) return false;
+    final now = DateTime.now();
+    final difference = now.difference(createdAt);
+    return difference.inDays < 7; // Consider story as new if created within last 7 days
   }
 }

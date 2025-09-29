@@ -1,3 +1,5 @@
+// pages/home_page.dart
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:hikaya_heroes/pages/choose_story_page.dart';
 import 'package:hikaya_heroes/pages/profile_page.dart';
@@ -21,29 +23,26 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   List<Story> _stories = [];
   List<Story> _filteredStories = [];
   bool _isLoading = true;
+  bool _hasError = false;
   UserModel? _user;
-  TextEditingController _searchController = TextEditingController();
+  final TextEditingController _searchController = TextEditingController();
   String? _selectedCategory;
 
-  // Animation controllers
   late AnimationController _pageAnimationController;
   late AnimationController _staggerAnimationController;
   late AnimationController _searchAnimationController;
   late Animation<double> _fadeAnimation;
   late Animation<double> _slideAnimation;
   late Animation<double> _scaleAnimation;
-  List<Animation<double>> _categoryAnimations = [];
+  final List<Animation<double>> _categoryAnimations = [];
 
   @override
   void initState() {
     super.initState();
-
     _initializeAnimations();
     _loadUser();
     _loadStories();
-    _searchController.addListener(() {
-      _applyFilters(_searchController.text, _selectedCategory);
-    });
+    _searchController.addListener(_onSearchChanged);
   }
 
   void _initializeAnimations() {
@@ -83,101 +82,136 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       ),
     );
 
-    // Create staggered animations for categories
+    // Initialize category animations
     for (int i = 0; i < Constants.categories.length; i++) {
+      final start = 0.1 + (i * 0.15);
+      final end = (0.6 + i * 0.15).clamp(0.0, 1.0); // clamp to 1.0
       _categoryAnimations.add(
         Tween<double>(begin: 0.0, end: 1.0).animate(
           CurvedAnimation(
             parent: _staggerAnimationController,
-            curve: Interval(
-              0.1 + (i * 0.15),
-              0.6 + (i * 0.15),
-              curve: Curves.elasticOut,
-            ),
+            curve: Interval(start, end, curve: Curves.elasticOut),
           ),
         ),
       );
     }
 
-    // Start animations
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _pageAnimationController.forward();
       _staggerAnimationController.forward();
     });
   }
 
-  void _loadUser() async {
-    String? uid = _firebaseService.currentUser?.uid;
-    if (uid != null) {
-      UserModel? user = await _firebaseService.getUserData(uid);
-      setState(() {
-        _user = user;
-      });
+  void _onSearchChanged() {
+    _applyFilters(_searchController.text, _selectedCategory);
+  }
+
+  Future<void> _loadUser() async {
+    try {
+      final uid = _firebaseService.currentUser?.uid;
+      if (uid != null) {
+        final UserModel? user = await _firebaseService.getUserData(uid);
+        if (mounted) {
+          setState(() {
+            _user = user;
+          });
+        }
+      }
+    } catch (e) {
+      print("Error loading user: $e");
     }
   }
 
-  void _loadStories() async {
-    setState(() => _isLoading = true);
-    try {
-      List<Story> stories = await _firebaseService.getAllStories();
+  Future<void> _loadStories() async {
+    if (mounted) {
       setState(() {
-        _stories = stories;
-        _filteredStories = stories;
-        _isLoading = false;
+        _isLoading = true;
+        _hasError = false;
       });
+    }
+
+    try {
+      final List<Story> stories = await _firebaseService.getAllStories();
+      if (mounted) {
+        setState(() {
+          _stories = stories;
+          _filteredStories = stories;
+          _isLoading = false;
+        });
+      }
     } catch (e) {
       print("Error loading stories: $e");
-      setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _hasError = true;
+        });
+      }
     }
   }
 
   void _applyFilters(String query, String? category) {
-    setState(() {
-      _filteredStories = _stories.where((story) {
-        bool matchesQuery = story.title.toLowerCase().contains(query.toLowerCase());
-        bool matchesCategory = category == null || story.theme == category;
-        return matchesQuery && matchesCategory;
-      }).toList();
-    });
+    if (mounted) {
+      setState(() {
+        _filteredStories = _stories.where((story) {
+          final bool matchesQuery = story.title.toLowerCase().contains(query.toLowerCase());
+          final bool matchesCategory = category == null || story.theme == category;
+          return matchesQuery && matchesCategory;
+        }).toList();
+      });
+    }
   }
 
   void _onCategoryTap(String category, int index) {
-    // Animate category selection
     _searchAnimationController.forward().then((_) {
       _searchAnimationController.reverse();
     });
 
-    setState(() {
-      _selectedCategory = (_selectedCategory == category) ? null : category;
-    });
+    if (mounted) {
+      setState(() {
+        _selectedCategory = (_selectedCategory == category) ? null : category;
+      });
+    }
     _applyFilters(_searchController.text, _selectedCategory);
   }
 
   void _onStoryTap(Story story) {
+    final isBookmarked = _user?.bookMarks?.contains(story.id) ?? false;
+    final isMale = _user?.gender == 'male';
+
     Navigator.push(
       context,
       PageRouteBuilder(
-        pageBuilder: (context, animation, secondaryAnimation) => ChooseStoryPage(story: story, gender: _user!.gender=='male',),
+        pageBuilder: (context, animation, secondaryAnimation) => ChooseStoryPage(
+          story: story,
+          isMark: isBookmarked,
+          gender: isMale,
+        ),
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          final curve = CurvedAnimation(parent: animation, curve: Curves.fastOutSlowIn);
           return ScaleTransition(
-            scale: Tween<double>(
-              begin: 0.0,
-              end: 1.0,
-            ).animate(
-              CurvedAnimation(
-                parent: animation,
-                curve: Curves.fastOutSlowIn,
-              ),
-            ),
-            child: FadeTransition(
-              opacity: animation,
-              child: child,
-            ),
+            scale: Tween<double>(begin: 0.0, end: 1.0).animate(curve),
+            child: FadeTransition(opacity: animation, child: child),
           );
         },
         transitionDuration: const Duration(milliseconds: 600),
       ),
     );
+  }
+
+  void _clearFilters() {
+    _searchController.clear();
+    if (mounted) {
+      setState(() {
+        _selectedCategory = null;
+      });
+    }
+    _applyFilters('', null);
+  }
+
+  Future<void> _onRefresh() async {
+    await _loadStories();
+    await _loadUser();
   }
 
   @override
@@ -200,299 +234,297 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
             valueColor: AlwaysStoppedAnimation<Color>(Constants.kPrimaryColor),
           ),
         )
-            : AnimatedBuilder(
-          animation: _pageAnimationController,
-          builder: (context, child) {
-            return SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // ===== Welcome Section =====
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    child: FadeTransition(
-                      opacity: _fadeAnimation,
-                      child: Transform.translate(
-                        offset: Offset(0, _slideAnimation.value),
-                        child: Row(
-                          children: [
-                            ScaleTransition(
-                              scale: _scaleAnimation,
-                              child: CircleAvatar(
-                                radius: 22,
-                                backgroundImage: const AssetImage("assets/images/logo.png"),
-                                backgroundColor: Colors.grey[300],
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Text(
-                              "مرحباً ${_user?.name ?? 'سدرة'} !",
-                              style: const TextStyle(
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold,
-                                fontFamily: 'Tajawal',
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 20),
-
-                  // ===== Search Bar =====
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: ScaleTransition(
-                      scale: _scaleAnimation,
-                      child: FadeTransition(
-                        opacity: _fadeAnimation,
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 300),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(25),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.1 * _searchAnimationController.value),
-                                blurRadius: 15 * _searchAnimationController.value,
-                                spreadRadius: 2 * _searchAnimationController.value,
-                                offset: const Offset(0, 5),
-                              ),
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.05),
-                                blurRadius: 5,
-                                offset: const Offset(0, 3),
-                              ),
-                            ],
-                          ),
-                          child: TextField(
-                            controller: _searchController,
-                            textAlign: TextAlign.right,
-                            decoration: const InputDecoration(
-                              hintText: "البحث في القصص...",
-                              hintStyle: TextStyle(fontFamily: 'Tajawal'),
-                              prefixIcon: Icon(Icons.search, color: Colors.grey),
-                              border: InputBorder.none,
-                              contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 30),
-
-                  // ===== Categories =====
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: FadeTransition(
-                      opacity: _fadeAnimation,
-                      child: const Text(
-                        "تصنيف الكتب",
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          fontFamily: 'Tajawal',
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 15),
-                  SizedBox(
-                    height: 110,
-                    child: ListView.builder(
-                      scrollDirection: Axis.horizontal,
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      itemCount: Constants.categories.length,
-                      itemBuilder: (context, index) {
-                        return GestureDetector(
-                          onTap: () => _onCategoryTap(Constants.categories[index], index),
-                          child: Container(
-                            margin: const EdgeInsets.only(right: 12),
-                            width: 80,
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 300),
-                              decoration: BoxDecoration(
-                                color: _selectedCategory == Constants.categories[index]
-                                    ? Colors.green[100]
-                                    : Colors.white,
-                                shape: BoxShape.circle,
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withOpacity(_selectedCategory == Constants.categories[index] ? 0.2 : 0.05),
-                                    blurRadius: _selectedCategory == Constants.categories[index] ? 10 : 5,
-                                    offset: const Offset(0, 3),
-                                  ),
-                                ],
-                              ),
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  ScaleTransition(
-                                    scale: _selectedCategory == Constants.categories[index]
-                                        ? Tween<double>(begin: 1.0, end: 1.2).animate(_searchAnimationController)
-                                        : AlwaysStoppedAnimation(1.0),
-                                    child: Image.asset(
-                                      _getCategoryIcon(index),
-                                      width: 48,
-                                      height: 48,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 6),
-                                  Text(
-                                    Constants.categories[index],
-                                    textAlign: TextAlign.center,
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      fontFamily: 'Tajawal',
-                                      fontWeight: _selectedCategory == Constants.categories[index]
-                                          ? FontWeight.bold
-                                          : FontWeight.normal,
-                                      color: _selectedCategory == Constants.categories[index]
-                                          ? Colors.green[800]
-                                          : Colors.grey[700],
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                  const SizedBox(height: 30),
-
-                  // ===== New Stories Section =====
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: FadeTransition(
-                      opacity: _fadeAnimation,
-                      child: const Text(
-                        "القصص الجديدة",
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          fontFamily: 'Tajawal',
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 15),
-
-                  // ===== Stories Grid =====
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: _filteredStories.isEmpty
-                        ? FadeTransition(
-                      opacity: _fadeAnimation,
-                      child: Center(
-                        child: Column(
-                          children: [
-                            Icon(
-                              Icons.search_off,
-                              size: 64,
-                              color: Colors.grey[400],
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              "لم يتم العثور على قصص",
-                              style: TextStyle(
-                                fontSize: 16,
-                                color: Colors.grey[600],
-                                fontFamily: 'Tajawal',
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    )
-                        : GridView.builder(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 2,
-                        mainAxisSpacing: 12,
-                        crossAxisSpacing: 12,
-                        childAspectRatio: 0.75,
-                      ),
-                      itemCount: _filteredStories.length,
-                      itemBuilder: (context, index) {
-                        final story = _filteredStories[index];
-                        return AnimatedBuilder(
-                          animation: _pageAnimationController,
-                          builder: (context, child) {
-                            return FadeTransition(
-                              opacity: Tween<double>(
-                                begin: 0.0,
-                                end: 1.0,
-                              ).animate(
-                                CurvedAnimation(
-                                  parent: _pageAnimationController,
-                                  curve: Interval(
-                                    0.5 + (index * 0.1),
-                                    1.0,
-                                    curve: Curves.easeIn,
+            : RefreshIndicator(
+          onRefresh: _onRefresh,
+          child: AnimatedBuilder(
+            animation: _pageAnimationController,
+            builder: (context, child) {
+              return CustomScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                slivers: [
+                  // Header Section
+                  SliverAppBar(
+                    backgroundColor: Colors.transparent,
+                    elevation: 0,
+                    expandedHeight: 140,
+                    flexibleSpace: FlexibleSpaceBar(
+                      background: Padding(
+                        padding: const EdgeInsets.all(20),
+                        child: FadeTransition(
+                          opacity: _fadeAnimation,
+                          child: Transform.translate(
+                            offset: Offset(0, _slideAnimation.value),
+                            child: Row(
+                              children: [
+                                ScaleTransition(
+                                  scale: _scaleAnimation,
+                                  child: CircleAvatar(
+                                    radius: 22,
+                                    backgroundColor: Colors.grey[300],
+                                    backgroundImage: _user?.profileImagePath != null &&
+                                        File(_user!.profileImagePath!).existsSync()
+                                        ? FileImage(File(_user!.profileImagePath!))
+                                        : const AssetImage("assets/images/logo.png") as ImageProvider,
                                   ),
                                 ),
-                              ),
-                              child: Transform.translate(
-                                offset: Offset(0, 50 * (1 - _pageAnimationController.value)),
-                                child: child,
-                              ),
-                            );
-                          },
-                          child: StoryCard(
-                            story: story,
-                            gender:_user!.gender=='male',
-                            onTap: () => _onStoryTap(story), showBookmarkIcon: true,
-                            
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Text(
+                                        "مرحباً ${_user?.name ?? 'سدرة'}!",
+                                        style: const TextStyle(
+                                          fontSize: 20,
+                                          fontWeight: FontWeight.bold,
+                                          fontFamily: 'Tajawal',
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        "اكتشف قصصاً جديدة ومثيرة",
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          color: Colors.grey[600],
+                                          fontFamily: 'Tajawal',
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                        );
-                      },
+                        ),
+                      ),
                     ),
                   ),
-                  const SizedBox(height: 20),
+
+                  // Search Section
+                  SliverPadding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    sliver: SliverToBoxAdapter(
+                      child: ScaleTransition(
+                        scale: _scaleAnimation,
+                        child: FadeTransition(
+                          opacity: _fadeAnimation,
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 300),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(25),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.1 * _searchAnimationController.value),
+                                  blurRadius: 15 * _searchAnimationController.value,
+                                  spreadRadius: 2 * _searchAnimationController.value,
+                                  offset: const Offset(0, 5),
+                                ),
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.05),
+                                  blurRadius: 5,
+                                  offset: const Offset(0, 3),
+                                ),
+                              ],
+                            ),
+                            child: Row(
+                              children: [
+                                if (_searchController.text.isNotEmpty || _selectedCategory != null)
+                                  IconButton(
+                                    icon: const Icon(Icons.clear, color: Colors.grey),
+                                    onPressed: _clearFilters,
+                                  ),
+                                Expanded(
+                                  child: TextField(
+                                    controller: _searchController,
+                                    textAlign: TextAlign.right,
+                                    decoration: const InputDecoration(
+                                      hintText: "البحث في القصص...",
+                                      hintStyle: TextStyle(fontFamily: 'Tajawal'),
+                                      prefixIcon: Icon(Icons.search, color: Colors.grey),
+                                      border: InputBorder.none,
+                                      contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  // Categories Section - FIXED: Replaced problematic ListView
+                  SliverPadding(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    sliver: SliverToBoxAdapter(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            child: FadeTransition(
+                              opacity: _fadeAnimation,
+                              child: const Text(
+                                "تصنيف الكتب",
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  fontFamily: 'Tajawal',
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 15),
+                          // FIXED: Using SizedBox with SingleChildScrollView instead of ListView
+                          SizedBox(
+                            height: 110,
+                            child: SingleChildScrollView(
+                              scrollDirection: Axis.horizontal,
+                              physics: const BouncingScrollPhysics(),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 16),
+                                child: Row(
+                                  children: List.generate(Constants.categories.length, (index) {
+                                    return AnimatedBuilder(
+                                      animation: _categoryAnimations[index],
+
+                                      builder: (context, child) {
+                                        return Transform.scale(
+                                          scale: _categoryAnimations[index].value, // clamp to valid scale
+                                          child: Opacity(
+                                            opacity: _categoryAnimations[index].value.clamp(0.0, 1.0), // clamp to 0..1
+                                            child: child,
+                                          ),
+                                        );;
+                                      },
+                                      child: GestureDetector(
+                                        onTap: () => _onCategoryTap(Constants.categories[index], index),
+                                        child: Container(
+                                          margin: const EdgeInsets.only(right: 12),
+                                          width: 80,
+                                          child: AnimatedContainer(
+                                            duration: const Duration(milliseconds: 300),
+                                            decoration: BoxDecoration(
+                                              gradient: _selectedCategory == Constants.categories[index]
+                                                  ? LinearGradient(
+                                                begin: Alignment.topLeft,
+                                                end: Alignment.bottomRight,
+                                                colors: [
+                                                  Constants.kPrimaryColor,
+                                                  Constants.kSecondaryColor,
+                                                ],
+                                              )
+                                                  : null,
+                                              color: _selectedCategory == Constants.categories[index]
+                                                  ? null
+                                                  : Colors.white,
+                                              shape: BoxShape.circle,
+                                              boxShadow: [
+                                                BoxShadow(
+                                                  color: Colors.black.withOpacity(
+                                                      _selectedCategory == Constants.categories[index] ? 0.2 : 0.05),
+                                                  blurRadius: _selectedCategory == Constants.categories[index] ? 10 : 5,
+                                                  offset: const Offset(0, 3),
+                                                ),
+                                              ],
+                                            ),
+                                            child: Column(
+                                              mainAxisAlignment: MainAxisAlignment.center,
+                                              children: [
+                                                ScaleTransition(
+                                                  scale: _selectedCategory == Constants.categories[index]
+                                                      ? Tween<double>(begin: 1.0, end: 1.2)
+                                                      .animate(_searchAnimationController)
+                                                      : AlwaysStoppedAnimation(1.0),
+                                                  child: Image.asset(
+                                                    _getCategoryIcon(index),
+                                                    width: 40,
+                                                    height: 40,
+
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 6),
+                                                Text(
+                                                  Constants.categories[index],
+                                                  textAlign: TextAlign.center,
+                                                  style: TextStyle(
+                                                    fontSize: 11,
+                                                    fontFamily: 'Tajawal',
+                                                    fontWeight: _selectedCategory == Constants.categories[index]
+                                                        ? FontWeight.bold
+                                                        : FontWeight.normal,
+                                                    color: _selectedCategory == Constants.categories[index]
+                                                        ? Colors.white
+                                                        : Colors.grey[700],
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                  }),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  // Stories Section
+                  SliverPadding(
+                    padding: const EdgeInsets.all(16),
+                    sliver: _buildStoriesGrid(),
+                  ),
                 ],
-              ),
-            );
-          },
+              );
+            },
+          ),
         ),
       ),
+      bottomNavigationBar: _buildBottomNavigationBar(),
+    );
+  }
 
-      // ===== Bottom Navigation =====
-      bottomNavigationBar: FadeTransition(
-        opacity: _fadeAnimation,
-        child: Container(
-          decoration: BoxDecoration(
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.1),
-                blurRadius: 10,
-                spreadRadius: 2,
-              ),
-            ],
-          ),
+  Widget _buildBottomNavigationBar() {
+    return FadeTransition(
+      opacity: _fadeAnimation,
+      child: Container(
+        decoration: BoxDecoration(
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 10,
+              spreadRadius: 2,
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
           child: BottomNavigationBar(
             currentIndex: _selectedIndex,
             selectedItemColor: Constants.kPrimaryColor,
             unselectedItemColor: Colors.grey,
-
-            onTap: _onBottomNavTap, // Use the new method here
-
+            backgroundColor: Colors.white,
+            elevation: 8,
+            onTap: _onBottomNavTap,
             items: const [
               BottomNavigationBarItem(
-                icon: Icon(Icons.home),
+                icon: Icon(Icons.home_rounded),
                 label: "الرئيسية",
               ),
               BottomNavigationBarItem(
-                icon: Icon(Icons.bookmark),
+                icon: Icon(Icons.bookmark_rounded),
                 label: "المحفوظات",
               ),
               BottomNavigationBarItem(
-                icon: Icon(Icons.person),
+                icon: Icon(Icons.person_rounded),
                 label: "حسابي",
               ),
             ],
@@ -501,15 +533,151 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       ),
     );
   }
-// In your home_page.dart, inside the _HomePageState class
+
+  Widget _buildStoriesGrid() {
+    if (_hasError) {
+      return SliverFillRemaining(
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.error_outline_rounded,
+                size: 64,
+                color: Colors.grey[400],
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                "حدث خطأ في تحميل القصص",
+                style: TextStyle(
+                  fontSize: 16,
+                  color: Colors.grey,
+                  fontFamily: 'Tajawal',
+                ),
+              ),
+              const SizedBox(height: 8),
+              ElevatedButton(
+                onPressed: _loadStories,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Constants.kPrimaryColor,
+                ),
+                child: const Text(
+                  "إعادة المحاولة",
+                  style: TextStyle(fontFamily: 'Tajawal'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (_filteredStories.isEmpty) {
+      return SliverFillRemaining(
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.search_off_rounded,
+                size: 80,
+                color: Colors.grey[400],
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                "لم يتم العثور على قصص",
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey,
+                  fontFamily: 'Tajawal',
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                "جرب البحث بكلمات مختلفة أو اختر تصنيفاً آخر",
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey,
+                  fontFamily: 'Tajawal',
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 20),
+              ElevatedButton(
+                onPressed: _clearFilters,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Constants.kPrimaryColor,
+                ),
+                child: const Text(
+                  "مسح الفلتر",
+                  style: TextStyle(fontFamily: 'Tajawal'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return SliverGrid(
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        mainAxisSpacing: 16,
+        crossAxisSpacing: 16,
+        childAspectRatio: 0.75,
+      ),
+      delegate: SliverChildBuilderDelegate(
+            (context, index) {
+          final story = _filteredStories[index];
+          return AnimatedBuilder(
+            animation: _pageAnimationController,
+            builder: (context, child) {
+              return FadeTransition(
+                opacity: Tween<double>(
+                  begin: 0.0,
+                  end: 1.0,
+                ).animate(
+                  CurvedAnimation(
+                    parent: _pageAnimationController,
+                    curve: Interval(
+                      0.5 + (index * 0.1),
+                      1.0,
+                      curve: Curves.easeIn,
+                    ),
+                  ),
+                ),
+                child: Transform.translate(
+                  offset: Offset(0, 50 * (1 - _pageAnimationController.value)),
+                  child: child,
+                ),
+              );
+            },
+            child: StoryCard(
+              story: story,
+              gender: _user?.gender == 'male',
+              onTap: () => _onStoryTap(story),
+              onBookmarkTap: (isBookmarked) {
+                // Handle bookmark toggle if needed
+              },
+              showBookmarkIcon: true,
+              isBookmarked: _user?.bookMarks?.contains(story.id) ?? false,
+            ),
+          );
+        },
+        childCount: _filteredStories.length,
+      ),
+    );
+  }
 
   void _onBottomNavTap(int index) {
     if (index == 1) {
-      // Bookmark page
       Navigator.push(
         context,
         PageRouteBuilder(
-          pageBuilder: (context, animation, secondaryAnimation) =>   BookmarkPage(gender: _user!.gender =='male'),
+          pageBuilder: (context, animation, secondaryAnimation) => BookmarkPage(
+            gender: _user?.gender == 'male',
+          ),
           transitionsBuilder: (context, animation, secondaryAnimation, child) {
             return SlideTransition(
               position: Tween<Offset>(
@@ -526,22 +694,18 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         ),
       );
     } else if (index == 2) {
-      // Profile page
       Navigator.push(
         context,
         PageRouteBuilder(
-          pageBuilder: (context, animation, secondaryAnimation) => const ProfilePage(),
+          pageBuilder: (context, animation, secondaryAnimation) => ProfilePage(
+            onProfileImageUpdated: _loadUser,
+          ),
           transitionsBuilder: (context, animation, secondaryAnimation, child) {
-            return ScaleTransition(
-              scale: Tween<double>(
-                begin: 0.0,
-                end: 1.0,
-              ).animate(
-                CurvedAnimation(
-                  parent: animation,
-                  curve: Curves.fastOutSlowIn,
-                ),
-              ),
+            return SlideTransition(
+              position: Tween<Offset>(
+                begin: const Offset(1.0, 0.0),
+                end: Offset.zero,
+              ).animate(animation),
               child: FadeTransition(
                 opacity: animation,
                 child: child,
@@ -550,27 +714,24 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           },
           transitionDuration: const Duration(milliseconds: 600),
         ),
-      );
+      ).then((_) {
+        _loadUser();
+      });
     } else {
-      // Home page (index 0) - just update the index
       setState(() {
         _selectedIndex = index;
       });
     }
-  }  String _getCategoryIcon(int index) {
-    switch (index) {
-      case 0:
-        return 'assets/icons/family.png';
-      case 1:
-        return 'assets/icons/scinceandhistory.png';
-      case 2:
-        return 'assets/icons/adventurs.png';
-      case 3:
-        return 'assets/icons/animal.png';
-      case 4:
-        return 'assets/icons/all.png';
-      default:
-        return 'assets/icons/all.png';
-    }
+  }
+
+  String _getCategoryIcon(int index) {
+    const icons = [
+      'assets/icons/family.png',
+      'assets/icons/scinceandhistory.png',
+      'assets/icons/adventurs.png',
+      'assets/icons/animal.png',
+      'assets/icons/all.png',
+    ];
+    return icons[index < icons.length ? index : icons.length - 1];
   }
 }

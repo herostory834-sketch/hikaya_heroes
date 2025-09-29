@@ -26,6 +26,7 @@ class StoryResultPage extends StatefulWidget {
 }
 
 class _StoryResultPageState extends State<StoryResultPage> with SingleTickerProviderStateMixin {
+
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
   late Animation<double> _slideAnimation;
@@ -128,7 +129,7 @@ class _StoryResultPageState extends State<StoryResultPage> with SingleTickerProv
 
   String? _generateStoryText() {
     if (!widget.customized) {
-      return widget.story.content;
+      return widget.gender?widget.story.content_for_boy:widget.story.content;
     }
 
     String? customizedStory = widget.customization!.storyText;
@@ -376,6 +377,7 @@ class _StoryResultPageState extends State<StoryResultPage> with SingleTickerProv
                 expandedHeight: 200,
                 floating: false,
                 pinned: true,
+                automaticallyImplyLeading: false,
                 flexibleSpace: FlexibleSpaceBar(
                   background: Container(
                     decoration: BoxDecoration(

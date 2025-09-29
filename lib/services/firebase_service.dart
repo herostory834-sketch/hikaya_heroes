@@ -19,7 +19,6 @@ class FirebaseService {
     required String gender,
   }) async {
     try {
-      // Create user in Firebase Auth
       UserCredential result = await _auth.createUserWithEmailAndPassword(
         email: email,
         password: password,
@@ -27,15 +26,16 @@ class FirebaseService {
 
       if (result.user == null) return null;
 
-      // Add user data to Firestore
       await _firestore.collection('users').doc(result.user!.uid).set({
         'name': name,
         'email': email,
         'gender': gender,
         'isAdmin': false,
+        'bookMarks': [],
         'createdAt': FieldValue.serverTimestamp(),
         'totalStoriesRead': 0,
         'totalPoints': 0,
+        'profileImagePath': null,
       });
 
       return result.user;
@@ -44,6 +44,33 @@ class FirebaseService {
       return null;
     }
   }
+
+  // Update user profile
+  Future<void> updateUserProfile(String uid, Map<String, dynamic> updates) async {
+    try {
+      await _firestore.collection('users').doc(uid).update(updates);
+      print("User profile updated with: $updates"); // Debugging
+    } catch (e) {
+      print("Error updating user profile: $e");
+      rethrow;
+    }
+  }
+
+  // Get user data from Firestore
+  Future<UserModel?> getUserData(String uid) async {
+    try {
+      DocumentSnapshot doc = await _firestore.collection('users').doc(uid).get();
+      if (doc.exists) {
+        return UserModel.fromFirestore(doc);
+      }
+      return null;
+    } catch (e) {
+      print("Error getting user data: $e");
+      return null;
+    }
+  }
+  // Create user with email and password
+
 
   // Sign in user
   Future<User?> signIn(String email, String password) async {
@@ -86,29 +113,6 @@ class FirebaseService {
     await _auth.signOut();
   }
 
-  // Get user data from Firestore
-  Future<UserModel?> getUserData(String uid) async {
-    try {
-      DocumentSnapshot doc = await _firestore.collection('users').doc(uid).get();
-      if (doc.exists) {
-        return UserModel.fromFirestore(doc);
-      }
-      return null;
-    } catch (e) {
-      print("Error getting user data: $e");
-      return null;
-    }
-  }
-
-  // Update user profile
-  Future<void> updateUserProfile(String uid, Map<String, dynamic> updates) async {
-    try {
-      await _firestore.collection('users').doc(uid).update(updates);
-    } catch (e) {
-      print("Error updating user profile: $e");
-      rethrow;
-    }
-  }
 
   // Get all users (admin only)
   Future<List<UserModel>> getAllUsers() async {
@@ -269,6 +273,13 @@ class FirebaseService {
         'storyId': storyId,
         'timestamp': FieldValue.serverTimestamp(),
       });
+      await _firestore
+          .collection('users')
+          .doc(user.uid)
+          .update(
+          {'bookMarks': FieldValue.arrayUnion([storyId]),});
+
+
     }
   }
 
@@ -281,6 +292,11 @@ class FirebaseService {
           .collection('bookmarks')
           .doc(storyId)
           .delete();
+      await _firestore
+          .collection('users')
+          .doc(user.uid)
+          .update(
+          {'bookMarks': FieldValue.arrayRemove([storyId]),});
     }
   }
 

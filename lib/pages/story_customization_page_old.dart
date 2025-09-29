@@ -235,63 +235,6 @@ Always use the user's language (Arabic if input is Arabic).
       return null;
     }
   }
-  Future<String?> _sendToGeminiApi(String base64Image, String storyText) async {
-    const apiKey = 'AIzaSyASsM1qJIaNWF80P-8ZtKz_kWZOX-78iuY';
-    const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image-preview:generateContent';
-
-    try {
-      final response = await http.post(
-        Uri.parse(url),
-        headers: {
-          'x-goog-api-key': apiKey,
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode({
-          'contents': [
-            {
-              'parts': [
-                {
-                  'text': 'Convert the image to cartoon style and incorporate the following story details: '
-
-                      'Story Text: $storyText'
-                },
-                {
-                  'inline_data': {
-                    'mime_type': 'image/png',
-                    'data': base64Image,
-                  }
-                }
-              ]
-            }
-          ],
-          'generationConfig': {
-            'temperature': 1,
-          },
-        }),
-      );
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final base64Result = data['candidates']?[0]['content']['parts']?[0]['inlineData']?['data'];
-        if (base64Result != null) {
-          return base64Result;
-        } else {
-          throw Exception('No base64 image data in response');
-        }
-      } else {
-        throw Exception('API request failed with status: ${response.statusCode}');
-      }
-    } catch (e) {
-      print('Error: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('خطأ أثناء معالجة الصورة: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return null;
-    }
-  }
 
   void _generateStory() async {
     if (_customizationQuestions.isEmpty) {
@@ -359,11 +302,48 @@ Always use the user's language (Arabic if input is Arabic).
 // Notify parent with animation
 
   }
+  void _showImageSourceBottomSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => SafeArea(
+        child: Container(
+          margin: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.photo_library, color: Constants.kPrimaryColor),
+                title: const Text('المعرض', style: TextStyle(fontFamily: 'Tajawal')),
+                onTap: () {
+                  Navigator.pop(context);
+                  _selectImage(ImageSource.gallery);
+                },
+              ),
+              Divider(height: 1, color: Colors.grey[300]),
+              ListTile(
+                leading: const Icon(Icons.camera_alt, color: Constants.kPrimaryColor),
+                title: const Text('الكاميرا', style: TextStyle(fontFamily: 'Tajawal')),
+                onTap: () {
+                  Navigator.pop(context);
+                  _selectImage(ImageSource.camera);
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
-  void _selectImage() async {
+  void _selectImage(ImageSource source) async {
     final ImagePicker picker = ImagePicker();
     final XFile? image = await picker.pickImage(
-      source: ImageSource.gallery,
+      source: source,
       imageQuality: 80,
       maxWidth: 800,
     );
@@ -588,12 +568,12 @@ Always use the user's language (Arabic if input is Arabic).
           )
               : IconButton(
             icon: Icon(Icons.add_photo_alternate, size: 40, color: Colors.grey[400]),
-            onPressed: _selectImage,
+            onPressed: _showImageSourceBottomSheet,
           ),
         ),
         const SizedBox(height: 10),
         TextButton(
-          onPressed: _selectImage,
+          onPressed: _showImageSourceBottomSheet,
           child: Text(
             _childImageBase64 != null ? 'تم إضافة الصورة' : 'إضافة صورة (PNG)',
             style: TextStyle(

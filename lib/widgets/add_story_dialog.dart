@@ -203,6 +203,7 @@ class _AddStoryDialogState extends State<AddStoryDialog> {
           theme: _selectedTheme,
           aiBoy: 'aiBoy',
           aiGirl: 'aiGirl',
+          content_for_boy: 'content_for_boy',
           illustrations: widget.existingStory?.illustrations ?? [],
           questions: questions,
           difficulty: _selectedDifficulty,

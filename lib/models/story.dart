@@ -7,6 +7,7 @@ class Story {
   final String title;
   final String description;
   final String content;
+  final String content_for_boy;
   final String theme;
   final List<String> illustrations;
   final List<Question> questions;
@@ -29,6 +30,7 @@ class Story {
     required this.aiGirl,
     required this.difficulty,
     required this.views,
+    required this.content_for_boy,
     required this.createdAt,
     required this.customizationQuestions,
   });
@@ -43,6 +45,7 @@ class Story {
       content: data['content'] ?? '',
       aiBoy: data['aiBoy'] ?? '',
       aiGirl: data['aiGirl'] ?? '',
+      content_for_boy: data['content_for_boy'] ?? '',
       theme: data['theme'] ?? '',
       illustrations: List<String>.from(data['illustrations'] ?? []),
       questions: _parseQuestions(data['questions'] ?? []),
@@ -62,6 +65,7 @@ class Story {
       'illustrations': illustrations,//
       'aiBoy': aiBoy,
       'aiGirl': aiGirl,
+      'content_for_boy': content_for_boy,
       'questions': questions.map((q) => q.toMap()).toList(),
       'difficulty': difficulty,
       'views': views,
