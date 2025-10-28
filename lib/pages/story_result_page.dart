@@ -11,13 +11,11 @@ import 'package:hikaya_heroes/utils/constants.dart';
 class StoryResultPage extends StatefulWidget {
   final Story story;
   final bool customized;
-  final bool gender;
   final StoryCustomization? customization;
 
   const StoryResultPage({
     super.key,
     required this.story,
-    required this.gender,
     this.customized = false,
     this.customization,
   });
@@ -130,7 +128,7 @@ class _StoryResultPageState extends State<StoryResultPage> with SingleTickerProv
 
   String? _generateStoryText() {
     if (!widget.customized) {
-      return widget.gender?widget.story.content_for_boy:widget.story.content;
+      return  widget.story.content;
     }
 
     String? customizedStory = widget.customization!.storyText;
@@ -209,7 +207,7 @@ class _StoryResultPageState extends State<StoryResultPage> with SingleTickerProv
         widget.customization!.childImage!.isEmpty) {
       return _buildImageContainer(
           widget.story.photo == 'photo' ? Image.asset(
-            widget.gender ? 'assets/images/happy.png' : 'assets/images/happy.png',
+              'assets/images/happy.png',
             width: double.infinity,
             height: double.infinity,
             fit: BoxFit.cover,
@@ -220,7 +218,7 @@ class _StoryResultPageState extends State<StoryResultPage> with SingleTickerProv
             fit: BoxFit.cover,
             errorBuilder: (context, error, stackTrace) {
               return Image.asset(
-                widget.gender ? 'assets/images/happy.png' : 'assets/images/happy.png',
+                'assets/images/happy.png',
                 width: double.infinity,
                 height: double.infinity,
                 fit: BoxFit.cover,

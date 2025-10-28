@@ -7,12 +7,10 @@ import 'package:hikaya_heroes/pages/choose_story_page.dart';
 import 'package:hikaya_heroes/utils/constants.dart';
 
 class BookmarkPage extends StatefulWidget {
-  final bool gender;
   final VoidCallback? onStoryRemoved;
 
   const BookmarkPage({
     super.key,
-    required this.gender,
     this.onStoryRemoved,
   });
 
@@ -141,7 +139,6 @@ class _BookmarkPageState extends State<BookmarkPage> with SingleTickerProviderSt
         pageBuilder: (context, animation, secondaryAnimation) => ChooseStoryPage(
           story: story,
           isMark: true,
-          gender: widget.gender,
         ),
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
           return ScaleTransition(
@@ -624,7 +621,6 @@ class _BookmarkPageState extends State<BookmarkPage> with SingleTickerProviderSt
       onDismissed: (direction) => _removeBookmark(story),
       child: StoryCard(
         story: story,
-        gender: widget.gender,
         onBookmarkTap: (isBookmarked) {
 
 setState(() {

@@ -185,7 +185,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         pageBuilder: (context, animation, secondaryAnimation) => ChooseStoryPage(
           story: story,
           isMark: isBookmarked,
-          gender: isMale,
         ),
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
           final curve = CurvedAnimation(parent: animation, curve: Curves.fastOutSlowIn);
@@ -655,7 +654,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
             },
             child: StoryCard(
               story: story,
-              gender: _user?.gender == 'male',
               onTap: () => _onStoryTap(story),
               onBookmarkTap: (isBookmarked) {
                 // Handle bookmark toggle if needed
@@ -676,7 +674,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         context,
         PageRouteBuilder(
           pageBuilder: (context, animation, secondaryAnimation) => BookmarkPage(
-            gender: _user?.gender == 'male',
           ),
           transitionsBuilder: (context, animation, secondaryAnimation, child) {
             return SlideTransition(

@@ -13,14 +13,12 @@ import 'package:path_provider/path_provider.dart';
 
 class StoryCustomizationPage extends StatefulWidget {
   final String storyId;
-  final bool gender;
   final Function(StoryCustomization) onCustomizationComplete;
 
   const StoryCustomizationPage({
     super.key,
     required this.storyId,
     required this.onCustomizationComplete,
-    required this.gender,
   });
 
   @override
@@ -63,12 +61,12 @@ class _StoryCustomizationPageState extends State<StoryCustomizationPage> with Si
     _pageController = PageController();
     _initializeAnimations();
     _loadStory();
-    _loadBaseImage(widget.gender);
+    _loadBaseImage();
   }
 
-  Future<void> _loadBaseImage(bool gender) async {
+  Future<void> _loadBaseImage() async {
     try {
-      ByteData bytes = await rootBundle.load(gender ? 'assets/images/happy.png' : 'assets/images/happy.png');
+      ByteData bytes = await rootBundle.load( 'assets/images/happy.png');
       Uint8List buffer = bytes.buffer.asUint8List();
       _baseImageBase64 = base64Encode(buffer);
     } catch (e) {
@@ -212,7 +210,6 @@ class _StoryCustomizationPageState extends State<StoryCustomizationPage> with Si
     }
 
     // Add gender
-    answers['الجنس'] = widget.gender ? 'ولد' : 'فتاة';
 
     // Show loading
     ScaffoldMessenger.of(context).showSnackBar(
@@ -255,7 +252,7 @@ class _StoryCustomizationPageState extends State<StoryCustomizationPage> with Si
       if (_childImageBase64 != null && _baseImageBase64 != null) {
         // Convert Base64 to temp files
         final baseFile = await _base64ToTempFile(
-            _baseImageBase64!, 'base_${widget.gender ? 'happy' : 'happy'}.png');
+            _baseImageBase64!, 'base_${ 'happy'}.png');
         final childFile =
         await _base64ToTempFile(_childImageBase64!, 'child.png');
 
@@ -271,11 +268,9 @@ class _StoryCustomizationPageState extends State<StoryCustomizationPage> with Si
       }
 
       // Update story content
-      if (widget.gender) {
-        _story!.content_for_boy = res;
-      } else {
+
         _story!.content = res;
-      }
+
 
       // Save swapped image locally
       if (processedImageBytes != null) {

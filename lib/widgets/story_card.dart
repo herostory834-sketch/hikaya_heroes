@@ -6,7 +6,6 @@ import 'package:hikaya_heroes/utils/constants.dart';
 
 class StoryCard extends StatelessWidget {
   final Story story;
-  final bool gender;
   final VoidCallback onTap;
   final bool showBookmarkIcon;
   final Function(String) onBookmarkTap;
@@ -15,7 +14,6 @@ class StoryCard extends StatelessWidget {
   const StoryCard({
     super.key,
     required this.story,
-    required this.gender,
     required this.onTap,
     required this.showBookmarkIcon,
     required this.onBookmarkTap,
@@ -46,7 +44,7 @@ class StoryCard extends StatelessWidget {
                 children: [
                   // Background Character Image
                  story.photo == 'photo' ? Image.asset(
-                    gender ? 'assets/images/happy.png' : 'assets/images/happy.png',
+                      'assets/images/happy.png',
                     width: double.infinity,
                     height: double.infinity,
                     fit: BoxFit.cover,
@@ -57,7 +55,7 @@ class StoryCard extends StatelessWidget {
                    fit: BoxFit.cover,
                    errorBuilder: (context, error, stackTrace) {
                      return Image.asset(
-                       gender ? 'assets/images/happy.png' : 'assets/images/happy.png',
+                       'assets/images/happy.png',
                        width: double.infinity,
                        height: double.infinity,
                        fit: BoxFit.cover,

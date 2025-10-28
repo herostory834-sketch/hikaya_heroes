@@ -12,13 +12,11 @@ import '../services/firebase_service.dart';
 class ChooseStoryPage extends StatefulWidget {
   final Story story;
   final bool isMark;
-  final bool gender;
 
   const ChooseStoryPage({
     super.key,
     required this.story,
     required this.isMark,
-    required this.gender,
   });
 
   @override
@@ -282,7 +280,6 @@ class _ChooseStoryPageState extends State<ChooseStoryPage> with SingleTickerProv
       PageRouteBuilder(
         pageBuilder: (context, animation, secondaryAnimation) => StoryCustomizationPage(
           storyId: widget.story.id,
-          gender: widget.gender,
           onCustomizationComplete: (customization) {
             _readStory(customized: true, customization: customization);
           },
@@ -308,7 +305,6 @@ class _ChooseStoryPageState extends State<ChooseStoryPage> with SingleTickerProv
       PageRouteBuilder(
         pageBuilder: (context, animation, secondaryAnimation) => StoryResultPage(
           story: widget.story,
-          gender: widget.gender,
           customized: customized,
           customization: customization,
         ),
@@ -536,7 +532,6 @@ class _ChooseStoryPageState extends State<ChooseStoryPage> with SingleTickerProv
         borderRadius: BorderRadius.circular(20),
         child: StoryCard(
           story: widget.story,
-          gender: widget.gender,
           isBookmarked: isBookmarked,
           onTap: _showCustomizationDialog,
           onBookmarkTap: _toggleBookmark,
