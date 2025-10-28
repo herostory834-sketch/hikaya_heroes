@@ -60,7 +60,7 @@ class _BookmarkPageState extends State<BookmarkPage> with SingleTickerProviderSt
   }
 
   Future<void> _loadBookmarkedStories() async {
-    if (mounted) {
+     if (mounted) {
       setState(() {
         _isLoading = true;
         _hasError = false;
@@ -183,6 +183,8 @@ class _BookmarkPageState extends State<BookmarkPage> with SingleTickerProviderSt
 
   @override
   Widget build(BuildContext context) {
+    print('_bookmarkedStories.length');
+    print(_bookmarkedStories.length);
     return Scaffold(
       backgroundColor: Colors.grey[50],
       body: AnimatedBuilder(
@@ -624,9 +626,10 @@ class _BookmarkPageState extends State<BookmarkPage> with SingleTickerProviderSt
         story: story,
         gender: widget.gender,
         onBookmarkTap: (isBookmarked) {
-          if (!isBookmarked) {
-            _removeBookmark(story);
-          }
+
+setState(() {
+  _bookmarkedStories.removeWhere((story) => story.id == isBookmarked);
+});
         },
         onTap: () => _onStoryTap(story),
         showBookmarkIcon: true,

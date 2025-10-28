@@ -6,16 +6,17 @@ class Story {
   final String id;
   final String title;
   final String description;
-  final String content;
-  final String content_for_boy;
+    String content;
+   String content_for_boy;
   final String theme;
+   String photo;
   final List<String> illustrations;
   final List<Question> questions;
   final String difficulty;
   final String aiBoy;
   final String aiGirl;
   final int views;
-  final DateTime createdAt;
+    DateTime createdAt;
   final List<String> customizationQuestions;
 
   Story({
@@ -30,6 +31,7 @@ class Story {
     required this.aiGirl,
     required this.difficulty,
     required this.views,
+    required this.photo,
     required this.content_for_boy,
     required this.createdAt,
     required this.customizationQuestions,
@@ -43,6 +45,7 @@ class Story {
       title: data['title'] ?? '',
       description: data['description'] ?? '',
       content: data['content'] ?? '',
+      photo: data['photo'] ?? '',
       aiBoy: data['aiBoy'] ?? '',
       aiGirl: data['aiGirl'] ?? '',
       content_for_boy: data['content_for_boy'] ?? '',
@@ -62,6 +65,7 @@ class Story {
       'description': description,
       'content': content,
       'theme': theme,
+      'photo': photo,
       'illustrations': illustrations,//
       'aiBoy': aiBoy,
       'aiGirl': aiGirl,

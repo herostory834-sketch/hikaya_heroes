@@ -201,6 +201,7 @@ class _AddStoryDialogState extends State<AddStoryDialog> {
           description: _descriptionController.text,
           content: _contentController.text,
           theme: _selectedTheme,
+          photo: 'photo',
           aiBoy: 'aiBoy',
           aiGirl: 'aiGirl',
           content_for_boy: 'content_for_boy',

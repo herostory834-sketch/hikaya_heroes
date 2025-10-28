@@ -16,7 +16,7 @@ class SignupPage extends StatefulWidget {
   State<SignupPage> createState() => _SignupPageState();
 }
 
-class _SignupPageState extends State<SignupPage> with SingleTickerProviderStateMixin {
+class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();

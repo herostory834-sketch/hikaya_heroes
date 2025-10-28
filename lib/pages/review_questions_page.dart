@@ -198,8 +198,8 @@ class _ReviewQuestionsPageState extends State<ReviewQuestionsPage> {
           TextButton(
             onPressed: () {
               Navigator.pop(context);
-              Navigator.popUntil(context, (route) => route.isFirst);
-            },
+              Navigator.pop(context);
+             },
             child: const Text('إغلاق'),
           ),
         ],

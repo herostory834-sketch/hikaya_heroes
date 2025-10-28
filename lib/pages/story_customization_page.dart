@@ -1,21 +1,26 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:hikaya_heroes/models/story.dart';
+import 'package:hikaya_heroes/services/face_swap_hugging_face.dart'; // Updated import for Hugging Face
 import 'package:hikaya_heroes/utils/constants.dart';
 import 'package:hikaya_heroes/services/firebase_service.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:typed_data';
-import 'package:flutter/services.dart' show rootBundle;
-import '../services/gemini_service.dart';
+import 'dart:io';  // Added for File I/O in _saveImageLocally
+import 'package:path_provider/path_provider.dart';
 
 class StoryCustomizationPage extends StatefulWidget {
   final String storyId;
+  final bool gender;
   final Function(StoryCustomization) onCustomizationComplete;
 
   const StoryCustomizationPage({
     super.key,
     required this.storyId,
     required this.onCustomizationComplete,
+    required this.gender,
   });
 
   @override
@@ -32,37 +37,25 @@ class _StoryCustomizationPageState extends State<StoryCustomizationPage> with Si
   int _currentPage = 0;
   String? _childImageBase64;
   String? _baseImageBase64;
-  String? _baseCartonImageBase64;
+  bool _isGeneratingStory = false;
+
   String? _selectedColor;
   bool _isLoading = true;
   Story? _story;
   List<String> _customizationQuestions = [];
-  bool _loading = false;
-  String? _customizedStory;
-  Uint8List? _cartoonImage;
-  Uint8List? _finalMergedImage;
 
-  // New variable for image mode selection
-  String _selectedImageMode = 'real'; // 'real' or 'cartoon'
-
-  // Enhanced color options with better visual representation
   static const List<Map<String, dynamic>> _colors = [
-    {'name': 'أحمر', 'color': Colors.red, 'emoji': '🔴'},
-    {'name': 'أزرق', 'color': Colors.blue, 'emoji': '🔵'},
-    {'name': 'أخضر', 'color': Colors.green, 'emoji': '🟢'},
-    {'name': 'أصفر', 'color': Colors.yellow, 'emoji': '🟡'},
-    {'name': 'أرجواني', 'color': Colors.purple, 'emoji': '🟣'},
-    {'name': 'برتقالي', 'color': Colors.orange, 'emoji': '🟠'},
-    {'name': 'وردي', 'color': Colors.pink, 'emoji': '🌸'},
-    {'name': 'بني', 'color': Colors.brown, 'emoji': '🟤'},
+    {'name': 'أحمر', 'color': Colors.red},
+    {'name': 'أزرق', 'color': Colors.blue},
+    {'name': 'أخضر', 'color': Colors.green},
+    {'name': 'أصفر', 'color': Colors.yellow},
+    {'name': 'أرجواني', 'color': Colors.purple},
+    {'name': 'برتقالي', 'color': Colors.orange},
+    {'name': 'وردي', 'color': Colors.pink},
+    {'name': 'بني', 'color': Colors.brown},
   ];
 
   final FirebaseService _firebaseService = FirebaseService();
-  final ImagePicker _imagePicker = ImagePicker();
-
-  // Loading states for better UX
-  bool _isGeneratingStory = false;
-  bool _isUploadingImage = false;
 
   @override
   void initState() {
@@ -70,142 +63,17 @@ class _StoryCustomizationPageState extends State<StoryCustomizationPage> with Si
     _pageController = PageController();
     _initializeAnimations();
     _loadStory();
-    _loadBaseImage();
-    _loadBaseCartonImage();
+    _loadBaseImage(widget.gender);
   }
 
-  Future<void> _loadBaseCartonImage() async {
+  Future<void> _loadBaseImage(bool gender) async {
     try {
-      ByteData bytes = await rootBundle.load('assets/images/grandmother.png');
-      Uint8List buffer = bytes.buffer.asUint8List();
-      _baseCartonImageBase64 = base64Encode(buffer);
-    } catch (e) {
-      print('Error loading base cartoon image: $e');
-    }
-  }
-
-  Future<void> _loadBaseImage() async {
-    try {
-      ByteData bytes = await rootBundle.load('assets/images/real_photo.png');
+      ByteData bytes = await rootBundle.load(gender ? 'assets/images/happy.png' : 'assets/images/happy.png');
       Uint8List buffer = bytes.buffer.asUint8List();
       _baseImageBase64 = base64Encode(buffer);
     } catch (e) {
       print('Error loading base image: $e');
     }
-  }
-
-  Future<void> _generateStoryAndImages(Map<String, String> answers) async {
-    if (_baseImageBase64 == null) {
-      _showErrorSnackBar('خطأ في تحميل الصورة الأساسية');
-      return;
-    }
-
-    setState(() => _isGeneratingStory = true);
-
-    // Show comprehensive loading dialog
-    _showProcessingDialog();
-
-    try {
-      // 1️⃣ Generate customized story
-      final storyText = _customizedStory ?? _story?.content ?? "قصة افتراضية.";
-      final newStory = await GeminiService.generateCustomizedStory(storyText, answers);
-
-      // 2️⃣ Generate image based on selected mode
-      String? generatedImageBase64;
-      if (_childImageBase64 != null) {
-        setState(() => _isUploadingImage = true);
-
-        if (_selectedImageMode == 'cartoon') {
-          print('_baseCartonImageBase64');
-          print(_baseCartonImageBase64);
-          // Use cartoon mode
-          generatedImageBase64 = await GeminiService.generateFamilyPhotoFromCarton(
-            baseImageBase64: _baseCartonImageBase64!,
-            childImageBase64: _childImageBase64!,
-          );
-        } else {
-          // Use real mode (default)
-          generatedImageBase64 = await GeminiService.generateFamilyPhoto(
-            baseImageBase64: _baseImageBase64!,
-            childImageBase64: _childImageBase64!,
-          );
-        }
-
-        setState(() => _isUploadingImage = false);
-      }
-
-      // Close loading dialog
-      if (mounted) Navigator.of(context).pop();
-
-      // Show success message
-      _showSuccessSnackBar('تم إنشاء القصة بنجاح!');
-
-      // 3️⃣ Send result to parent
-      final customization = StoryCustomization(
-        storyId: widget.storyId,
-        storyText: newStory ?? _story?.content ?? "قصة افتراضية.",
-        childImage: generatedImageBase64,
-        imageMode: _selectedImageMode,
-      );
-
-      widget.onCustomizationComplete(customization);
-
-    } catch (e) {
-      if (mounted) Navigator.of(context).pop();
-      _showErrorSnackBar('خطأ في إنشاء القصة: $e');
-      print('Error generating story: $e');
-    } finally {
-      setState(() => _isGeneratingStory = false);
-    }
-  }
-
-  void _showProcessingDialog() {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        backgroundColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            AnimatedRotation(
-              turns: _isGeneratingStory ? 1 : 0,
-              duration: const Duration(seconds: 2),
-              child: Image.asset('assets/images/ai_icon.png', width: 60, height: 60),
-            ),
-            const SizedBox(height: 20),
-            Text(
-              _isUploadingImage ? 'جاري معالجة الصورة...' : 'الذكاء الاصطناعي يصنع قصتك...',
-              style: const TextStyle(fontFamily: 'Tajawal', fontSize: 16),
-              textAlign: TextAlign.center,
-            ),
-            if (_isUploadingImage) ...[
-              const SizedBox(height: 10),
-              Text(
-                'النمط: ${_selectedImageMode == 'cartoon' ? 'كرتوني' : 'واقعي'}',
-                style: TextStyle(
-                  fontFamily: 'Tajawal',
-                  fontSize: 14,
-                  color: Constants.kPrimaryColor,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ],
-            const SizedBox(height: 15),
-            LinearProgressIndicator(
-              backgroundColor: Colors.grey[200],
-              valueColor: AlwaysStoppedAnimation<Color>(Constants.kPrimaryColor),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              'هذا قد يستغرق بضع ثوانٍ...',
-              style: TextStyle(fontFamily: 'Tajawal', fontSize: 12, color: Colors.grey[600]),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 
   void _initializeAnimations() {
@@ -243,13 +111,13 @@ class _StoryCustomizationPageState extends State<StoryCustomizationPage> with Si
     try {
       final story = await _firebaseService.getStoryById(widget.storyId);
       if (story != null) {
+        print(story.content);
+        print(story.customizationQuestions);
         setState(() {
           _story = story;
           _customizationQuestions = story.customizationQuestions;
-          _customizedStory = story.content;
-          // Create controllers for all questions except the last one (color)
           _controllers = List.generate(
-            _customizationQuestions.length - 1,
+            _customizationQuestions.length - 1, // Exclude color question
                 (index) => TextEditingController(),
           );
           _isLoading = false;
@@ -259,7 +127,12 @@ class _StoryCustomizationPageState extends State<StoryCustomizationPage> with Si
       }
     } catch (e) {
       print('Error loading story: $e');
-      _showErrorSnackBar('خطأ في تحميل القصة: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('خطأ في تحميل القصة: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
       setState(() => _isLoading = false);
     }
   }
@@ -271,6 +144,7 @@ class _StoryCustomizationPageState extends State<StoryCustomizationPage> with Si
         curve: Curves.easeInOut,
       );
     } else {
+      setState(() => _isGeneratingStory = true);
       _generateStory();
     }
   }
@@ -284,15 +158,111 @@ class _StoryCustomizationPageState extends State<StoryCustomizationPage> with Si
     }
   }
 
+  // Updated method to use Hugging Face for story customization (using a text-generation model)
+  Future<String?> _sendToHuggingFaceApiToChangeTheStory(
+      String storyText,
+      Map<String, String> answers,
+      ) async {
+    const String hfUrl = 'https://api-inference.huggingface.co/models/google/flan-t5-large'; // Text2Text model for customization
+    const String hfToken = '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'; // Add your Hugging Face token here if private
+
+    String customizationText = answers.entries.map((e) => '${e.key}: ${e.value}').join(', ');
+
+    final prompt = '''
+The general story is: $storyText  
+
+Based on the customize questions and user answers: $customizationText  
+
+Extract the user preferences then customize the general story to fit children's preferences.  
+Always use the user's language (Arabic if input is Arabic).  
+
+Return ONLY the customized story text.
+''';
+
+    final headers = {
+      'Authorization': 'Bearer $hfToken',
+      'Content-Type': 'application/json',
+    };
+
+    final body = json.encode({
+      'inputs': prompt,
+      'parameters': {
+        'max_length': 1000,
+        'temperature': 0.7,
+      }
+    });
+
+    try {
+      final response = await http.post(
+        Uri.parse(hfUrl),
+        headers: headers,
+        body: body,
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data.isNotEmpty && data[0]['generated_text'] != null) {
+          String customizedStory = data[0]['generated_text'];
+          // Clean up if needed (remove prompt repetition)
+          if (customizedStory.contains(storyText)) {
+            customizedStory = customizedStory.replaceFirst(storyText, '').trim();
+          }
+          return customizedStory.isNotEmpty ? customizedStory : storyText;
+        } else {
+          return storyText; // Fallback
+        }
+      } else {
+        throw Exception('Hugging Face API request failed: ${response.statusCode} - ${response.body}');
+      }
+    } catch (e) {
+      print('Error processing story with Hugging Face: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('خطأ أثناء معالجة القصة: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return null;
+    }
+  }
+
+  // Helper method to convert Base64 to temporary File
+  Future<File?> _base64ToTempFile(String base64String, String fileName) async {
+    try {
+      final directory = await getTemporaryDirectory();
+      final file = File('${directory.path}/$fileName');
+      final bytes = base64Decode(base64String);
+      await file.writeAsBytes(bytes);
+      return file;
+    } catch (e) {
+      print('Error creating temp file: $e');
+      return null;
+    }
+  }
+
+  Future<String?> _saveImageLocally(XFile? selectedImage, String photoName) async {
+    if (selectedImage == null) return null;
+    try {
+      final directory = await getApplicationDocumentsDirectory();
+      final imagePath = '${directory.path}/$photoName';
+      final bytes = await selectedImage.readAsBytes();
+      await File(imagePath).writeAsBytes(bytes);
+      return imagePath;
+    } catch (e) {
+      print('Error saving image: $e');
+      return null;
+    }
+  }
+
   void _generateStory() async {
     if (_customizationQuestions.isEmpty) {
-      _showWarningSnackBar('لا توجد أسئلة تخصيص متاحة');
-      return;
-    }
-
-    // Validate required fields
-    if (_currentPage == _customizationQuestions.length - 1 && _selectedColor == null) {
-      _showWarningSnackBar('يرجى اختيار اللون');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('لا توجد أسئلة تخصيص متاحة'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      setState(() => _isGeneratingStory = false);
       return;
     }
 
@@ -300,19 +270,183 @@ class _StoryCustomizationPageState extends State<StoryCustomizationPage> with Si
     Map<String, String> answers = {};
     for (int i = 0; i < _customizationQuestions.length; i++) {
       if (i < _controllers.length) {
-        answers[_customizationQuestions[i]] = _controllers[i].text.isNotEmpty ? _controllers[i].text : 'غير محدد';
+        answers[_customizationQuestions[i]] =
+        _controllers[i].text.isNotEmpty ? _controllers[i].text : 'غير محدد';
       } else if (i == _customizationQuestions.length - 1) {
         answers[_customizationQuestions[i]] = _selectedColor ?? 'أزرق';
       }
     }
 
-    _generateStoryAndImages(answers);
+    // Add gender
+    answers['الجنس'] = widget.gender ? 'ولد' : 'فتاة';
+
+    // Show loading
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('جاري معالجة القصة والصورة...'),
+        backgroundColor: Colors.blue,
+        duration: Duration(seconds: 10),
+      ),
+    );
+
+    String storyText = _story?.content ?? 'قصة افتراضية.';
+    String res = storyText; // Replace with story generation if needed
+
+    // Specific replacements for the story based on user answers
+    // Assuming questions order: 0 - hero name (replace سُدرة), 1 - friend name (replace سارة, with Yamon if empty?), 2 - grandma name (replace نورة)
+    String customizedStory = storyText;
+    if (_customizationQuestions.length > 0) {
+      String heroName = answers[_customizationQuestions[0]] ?? 'سُدرة';
+      customizedStory = customizedStory.replaceAll('سُدرة', heroName);
+    }
+    if (_customizationQuestions.length > 1) {
+      String friendName = answers[_customizationQuestions[1]] ?? 'يمون'; // Default to Yamon as per request if empty
+      customizedStory = customizedStory.replaceAll('سارة', friendName);
+    }
+    if (_customizationQuestions.length > 2) {
+      String grandmaName = answers[_customizationQuestions[2]] ?? 'نورة';
+      customizedStory = customizedStory.replaceAll('نورة', grandmaName);
+    }
+    // Replace color (assuming last question is color, replace أبيض)
+    if (_selectedColor != null) {
+      customizedStory = customizedStory.replaceAll('أبيض', _selectedColor!);
+    }
+
+    res = customizedStory;
+
+    Uint8List? processedImageBytes;
+    String? localPhotoPath;
+
+    try {
+      if (_childImageBase64 != null && _baseImageBase64 != null) {
+        // Convert Base64 to temp files
+        final baseFile = await _base64ToTempFile(
+            _baseImageBase64!, 'base_${widget.gender ? 'happy' : 'happy'}.png');
+        final childFile =
+        await _base64ToTempFile(_childImageBase64!, 'child.png');
+
+        if (baseFile != null && childFile != null) {
+          // Call your Render backend
+          processedImageBytes =
+          await FaceSwapBackend.swapFaces(baseFile, childFile);
+
+          // Clean up temp files
+          await baseFile.delete();
+          await childFile.delete();
+        }
+      }
+
+      // Update story content
+      if (widget.gender) {
+        _story!.content_for_boy = res;
+      } else {
+        _story!.content = res;
+      }
+
+      // Save swapped image locally
+      if (processedImageBytes != null) {
+        final photoName = '${_story!.title}_${answers.values.first}.jpg';
+        final xfile = XFile.fromData(processedImageBytes, name: photoName);
+        localPhotoPath = await _saveImageLocally(xfile, photoName);
+        if (localPhotoPath != null) {
+          _story!.photo = localPhotoPath;
+        }
+      }
+    } catch (e) {
+      print('Error generating/saving image: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('خطأ في إنشاء الصورة: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+
+    // Set createdAt and save to Firebase
+    _story!.createdAt = DateTime.now();
+    print(_story!.toMap().toString());
+
+    String? id = await _firebaseService.addCustomizeStory(_story!);
+    if (id == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('خطأ في حفظ القصة'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      setState(() => _isGeneratingStory = false);
+      return;
+    }
+
+    StoryCustomization storyCustomization = StoryCustomization(
+      storyId: id,
+      childImage: processedImageBytes != null
+          ? base64Encode(processedImageBytes)
+          : null,
+      storyText: res,
+    );
+
+    await _animationController.reverse();
+    setState(() => _isGeneratingStory = false);
+    widget.onCustomizationComplete(storyCustomization);
   }
 
-  void _selectImage() async {
+  // Helper to convert URL to Base64 (if Hugging Face returns a URL)
+  Future<String?> _urlToBase64(String url) async {
+    try {
+      final response = await http.get(Uri.parse(url));
+      if (response.statusCode == 200) {
+        final bytes = response.bodyBytes;
+        return base64Encode(bytes);
+      }
+    } catch (e) {
+      print('Error fetching image from URL: $e');
+    }
+    return null;
+  }
+
+  void _showImageSourceBottomSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => SafeArea(
+        child: Container(
+          margin: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.photo_library, color: Constants.kPrimaryColor),
+                title: const Text('المعرض', style: TextStyle(fontFamily: 'Tajawal')),
+                onTap: () {
+                  Navigator.pop(context);
+                  _selectImage(ImageSource.gallery);
+                },
+              ),
+              Divider(height: 1, color: Colors.grey[300]),
+              ListTile(
+                leading: const Icon(Icons.camera_alt, color: Constants.kPrimaryColor),
+                title: const Text('الكاميرا', style: TextStyle(fontFamily: 'Tajawal')),
+                onTap: () {
+                  Navigator.pop(context);
+                  _selectImage(ImageSource.camera);
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _selectImage(ImageSource source) async {
     final ImagePicker picker = ImagePicker();
     final XFile? image = await picker.pickImage(
-      source: ImageSource.gallery,
+      source: source,
       imageQuality: 80,
       maxWidth: 800,
     );
@@ -332,195 +466,6 @@ class _StoryCustomizationPageState extends State<StoryCustomizationPage> with Si
         ),
       );
     }
-  }
-
-  Widget _buildImageSelection() {
-    return Column(
-      children: [
-        const SizedBox(height: 20),
-        Container(
-          width: 120,
-          height: 120,
-          decoration: BoxDecoration(
-            color: Colors.grey[100],
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: Colors.grey[300]!),
-          ),
-          child: _childImageBase64 != null
-              ? ClipRRect(
-            borderRadius: BorderRadius.circular(20),
-            child: Image.memory(
-              base64Decode(_childImageBase64!),
-              fit: BoxFit.cover,
-            ),
-          )
-              : IconButton(
-            icon: Icon(Icons.add_photo_alternate, size: 40, color: Colors.grey[400]),
-            onPressed: _selectImage,
-          ),
-        ),
-        const SizedBox(height: 10),
-        TextButton(
-          onPressed: _selectImage,
-          child: Text(
-            _childImageBase64 != null ? 'تم إضافة الصورة' : 'إضافة صورة (PNG)',
-            style: TextStyle(
-              color: _childImageBase64 != null ? Colors.green : Constants.kPrimaryColor,
-              fontFamily: 'Tajawal',
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  // Add image mode selection widget
-  Widget _buildImageModeSelection() {
-    return Column(
-      children: [
-        const SizedBox(height: 20),
-        const Text(
-          'اختر نمط الصورة:',
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-            fontFamily: 'Tajawal',
-          ),
-        ),
-        const SizedBox(height: 10),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            _buildModeOption('real', 'واقعي', Icons.photo),
-            const SizedBox(width: 20),
-            _buildModeOption('cartoon', 'كرتوني', Icons.animation),
-          ],
-        ),
-        const SizedBox(height: 10),
-        Text(
-          _selectedImageMode == 'cartoon'
-              ? 'سيتم تحويل الصورة إلى نمط كرتوني جميل'
-              : 'سيتم الحفاظ على النمط الواقعي للصورة',
-          style: TextStyle(
-            fontSize: 12,
-            color: Colors.grey[600],
-            fontFamily: 'Tajawal',
-          ),
-          textAlign: TextAlign.center,
-        ),
-      ],
-    );
-  }
-
-  Widget _buildModeOption(String mode, String label, IconData icon) {
-    final isSelected = _selectedImageMode == mode;
-    return GestureDetector(
-      onTap: () {
-        setState(() {
-          _selectedImageMode = mode;
-        });
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
-        decoration: BoxDecoration(
-          color: isSelected ? Constants.kPrimaryColor : Colors.grey[100],
-          borderRadius: BorderRadius.circular(15),
-          border: Border.all(
-            color: isSelected ? Constants.kPrimaryColor : Colors.grey[300]!,
-            width: 2,
-          ),
-          boxShadow: [
-            if (isSelected)
-              BoxShadow(
-                color: Constants.kPrimaryColor.withOpacity(0.3),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              ),
-          ],
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, color: isSelected ? Colors.white : Constants.kPrimaryColor, size: 20),
-            const SizedBox(width: 8),
-            Text(
-              label,
-              style: TextStyle(
-                color: isSelected ? Colors.white : Constants.kPrimaryColor,
-                fontFamily: 'Tajawal',
-                fontWeight: FontWeight.bold,
-                fontSize: 14,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  bool _isValidPNG(Uint8List bytes) {
-    // PNG signature check
-    if (bytes.length < 8) return false;
-    return bytes[0] == 0x89 &&
-        bytes[1] == 0x50 &&
-        bytes[2] == 0x4E &&
-        bytes[3] == 0x47;
-  }
-
-  // Enhanced snackbar methods
-  void _showSuccessSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            const Icon(Icons.check_circle, color: Colors.white),
-            const SizedBox(width: 8),
-            Text(message, style: const TextStyle(fontFamily: 'Tajawal')),
-          ],
-        ),
-        backgroundColor: Colors.green,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        duration: const Duration(seconds: 3),
-      ),
-    );
-  }
-
-  void _showErrorSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            const Icon(Icons.error, color: Colors.white),
-            const SizedBox(width: 8),
-            Text(message, style: const TextStyle(fontFamily: 'Tajawal')),
-          ],
-        ),
-        backgroundColor: Colors.red,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        duration: const Duration(seconds: 4),
-      ),
-    );
-  }
-
-  void _showWarningSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            const Icon(Icons.warning, color: Colors.white),
-            const SizedBox(width: 8),
-            Text(message, style: const TextStyle(fontFamily: 'Tajawal')),
-          ],
-        ),
-        backgroundColor: Colors.orange,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        duration: const Duration(seconds: 3),
-      ),
-    );
   }
 
   Widget _buildProgressIndicator() {
@@ -562,7 +507,9 @@ class _StoryCustomizationPageState extends State<StoryCustomizationPage> with Si
           ),
           const SizedBox(height: 10),
           LinearProgressIndicator(
-            value: _customizationQuestions.isEmpty ? 0 : (_currentPage + 1) / _customizationQuestions.length,
+            value: _customizationQuestions.isEmpty
+                ? 0
+                : (_currentPage + 1) / _customizationQuestions.length,
             backgroundColor: Colors.grey[200],
             valueColor: AlwaysStoppedAnimation<Color>(Constants.kPrimaryColor),
             borderRadius: BorderRadius.circular(10),
@@ -632,10 +579,7 @@ class _StoryCustomizationPageState extends State<StoryCustomizationPage> with Si
               ),
               const SizedBox(height: 40),
               _buildInputField(index),
-              if (index == 0) ...[
-                _buildImageSelection(),
-                _buildImageModeSelection(), // Add mode selection on first page
-              ],
+              if (index == 0) _buildImageSelection(),
             ],
           ),
         ),
@@ -658,71 +602,94 @@ class _StoryCustomizationPageState extends State<StoryCustomizationPage> with Si
               });
             },
             child: Container(
-              width: 70,
-              height: 70,
+              width: 60,
+              height: 60,
               decoration: BoxDecoration(
                 color: color['color'],
-                borderRadius: BorderRadius.circular(15),
+                borderRadius: BorderRadius.circular(10),
                 border: Border.all(
                   color: isSelected ? Colors.black : Colors.grey[300]!,
                   width: isSelected ? 3 : 1,
                 ),
-                boxShadow: [
-                  if (isSelected)
-                    BoxShadow(
-                      color: color['color'].withOpacity(0.5),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    ),
-                ],
               ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  if (isSelected)
-                    const Icon(Icons.check, color: Colors.white, size: 20),
-                  Text(
-                    color['emoji'],
-                    style: const TextStyle(fontSize: 16),
-                  ),
-                  Text(
-                    color['name'],
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                      fontFamily: 'Tajawal',
-                    ),
-                  ),
-                ],
-              ),
+              child: isSelected
+                  ? const Icon(
+                Icons.check,
+                color: Colors.white,
+                size: 30,
+              )
+                  : null,
             ),
           );
         }).toList(),
       );
     }
 
-    return TextField(
-      controller: _controllers[index],
-      decoration: InputDecoration(
-        hintText: _getHintText(index),
-        hintStyle: const TextStyle(fontFamily: 'Tajawal'),
-        filled: true,
-        fillColor: Colors.grey[50],
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(15),
-          borderSide: BorderSide.none,
+    return Card(
+      child: TextField(
+        controller: _controllers[index],
+        maxLines: 1,  // Added to prevent overflow for short inputs
+        decoration: InputDecoration(
+          hintText: _getHintText(index),
+          hintStyle: const TextStyle(fontFamily: 'Tajawal'),
+          filled: true,
+          fillColor: Colors.grey[50],
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(15),
+            borderSide: BorderSide.none,
+          ),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+          suffixIcon: _controllers[index].text.isNotEmpty
+              ? IconButton(
+            icon: const Icon(Icons.clear, size: 20),
+            onPressed: () => _controllers[index].clear(),
+          )
+              : null,
         ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
-        suffixIcon: _controllers[index].text.isNotEmpty
-            ? IconButton(
-          icon: const Icon(Icons.clear, size: 20),
-          onPressed: () => _controllers[index].clear(),
-        )
-            : null,
+        style: const TextStyle(fontSize: 16, fontFamily: 'Tajawal'),
+        textAlign: TextAlign.right,
       ),
-      style: const TextStyle(fontSize: 16, fontFamily: 'Tajawal'),
-      textAlign: TextAlign.right,
+    );
+  }
+
+  Widget _buildImageSelection() {
+    return Column(
+      children: [
+        const SizedBox(height: 20),
+        Container(
+          width: 120,
+          height: 120,
+          decoration: BoxDecoration(
+            color: Colors.grey[100],
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: Colors.grey[300]!),
+          ),
+          child: _childImageBase64 != null
+              ? ClipRRect(
+            borderRadius: BorderRadius.circular(20),
+            child: Image.memory(
+              base64Decode(_childImageBase64!),
+              fit: BoxFit.cover,
+            ),
+          )
+              : IconButton(
+            icon: Icon(Icons.add_photo_alternate, size: 40, color: Colors.grey[400]),
+            onPressed: _showImageSourceBottomSheet,
+          ),
+        ),
+        const SizedBox(height: 10),
+        TextButton(
+          onPressed: _showImageSourceBottomSheet,
+          child: Text(
+            _childImageBase64 != null ? 'تم إضافة الصورة' : 'إضافة صورة (PNG)',
+            style: TextStyle(
+              color: _childImageBase64 != null ? Colors.green : Constants.kPrimaryColor,
+              fontFamily: 'Tajawal',
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -766,9 +733,20 @@ class _StoryCustomizationPageState extends State<StoryCustomizationPage> with Si
           Expanded(
             flex: _currentPage > 0 ? 1 : 2,
             child: ElevatedButton(
-              onPressed: _isGeneratingStory ? null : _nextPage,
+              onPressed: () {
+                if (_currentPage == _customizationQuestions.length - 1 && _selectedColor == null) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('يرجى اختيار اللون'),
+                      backgroundColor: Colors.orange,
+                    ),
+                  );
+                  return;
+                }
+                _nextPage();
+              },
               style: ElevatedButton.styleFrom(
-                backgroundColor: _isGeneratingStory ? Colors.grey : Constants.kPrimaryColor,
+                backgroundColor: Constants.kPrimaryColor,
                 padding: const EdgeInsets.symmetric(vertical: 15),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
@@ -776,16 +754,13 @@ class _StoryCustomizationPageState extends State<StoryCustomizationPage> with Si
                 elevation: 2,
               ),
               child: _isGeneratingStory
-                  ? const SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  valueColor: AlwaysStoppedAnimation(Colors.white),
-                ),
+                  ? const CircularProgressIndicator(
+                color: Colors.white,
               )
                   : Text(
-                _currentPage == _customizationQuestions.length - 1 ? 'إنهاء التخصيص 🎉' : 'التالي',
+                _currentPage == _customizationQuestions.length - 1
+                    ? 'إنهاء التخصيص 🎉'
+                    : 'التالي',
                 style: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
@@ -801,22 +776,33 @@ class _StoryCustomizationPageState extends State<StoryCustomizationPage> with Si
   }
 
   IconData _getQuestionIcon(int index) {
-    if (index == _customizationQuestions.length - 1) return Icons.color_lens;
-    if (index == 0) return Icons.add_photo_alternate;
-    return Icons.person;
+    final question = _customizationQuestions[index].toLowerCase();
+    if (index == _customizationQuestions.length - 1 || question.contains('لون')) {
+      return Icons.color_lens;
+    }
+    if (question.contains('اسم') || question.contains('name')) {
+      return Icons.person;
+    }
+    return Icons.help_outline;  // Default
   }
 
   String _getQuestionDescription(int index) {
-    if (index == _customizationQuestions.length - 1) return 'اختر اللون المفضل الذي سيظهر في القصة';
-    if (index == 0) return 'يمكنك إضافة صورة شخصية واختيار نمطها لدمجها في القصة';
-    return 'أدخل اسم الشخصية أو التفاصيل المطلوبة';
+    final question = _customizationQuestions[index].toLowerCase();
+    if (index == _customizationQuestions.length - 1 || question.contains('لون')) {
+      return 'اختر اللون المفضل الذي سيظهر في القصة';
+    }
+    if (question.contains('اسم') || question.contains('name')) {
+      return 'أدخل اسم الشخصية';
+    }
+    return 'أجب على السؤال لتخصيص القصة';  // Dynamic default
   }
 
   String _getHintText(int index) {
-    if (index < _controllers.length) {
-      return 'اكتب هنا...';
+    final question = _customizationQuestions[index].toLowerCase();
+    if (question.contains('اسم') || question.contains('name')) {
+      return 'اكتب اسم الشخصية...';
     }
-    return '';
+    return 'اكتب هنا...';
   }
 
   @override
@@ -832,39 +818,17 @@ class _StoryCustomizationPageState extends State<StoryCustomizationPage> with Si
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return Scaffold(
-        body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              CircularProgressIndicator(valueColor: AlwaysStoppedAnimation(Constants.kPrimaryColor)),
-              const SizedBox(height: 20),
-              const Text('جاري تحميل القصة...', style: TextStyle(fontFamily: 'Tajawal')),
-            ],
-          ),
-        ),
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
       );
     }
 
     if (_story == null || _customizationQuestions.isEmpty) {
       return Scaffold(
         body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.error_outline, size: 60, color: Colors.red),
-              const SizedBox(height: 20),
-              const Text(
-                'خطأ: لا توجد أسئلة تخصيص متاحة',
-                style: TextStyle(fontFamily: 'Tajawal', color: Colors.red, fontSize: 16),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 20),
-              ElevatedButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('العودة', style: TextStyle(fontFamily: 'Tajawal')),
-              ),
-            ],
+          child: Text(
+            'خطأ: لا توجد أسئلة تخصيص متاحة',
+            style: TextStyle(fontFamily: 'Tajawal', color: Colors.red),
           ),
         ),
       );
@@ -912,8 +876,8 @@ class _StoryCustomizationPageState extends State<StoryCustomizationPage> with Si
                       Row(
                         children: [
                           IconButton(
-                            onPressed: _isGeneratingStory ? null : () => Navigator.pop(context),
-                            icon: Icon(Icons.arrow_back, color: _isGeneratingStory ? Colors.grey : Colors.white),
+                            onPressed: () => Navigator.pop(context),
+                            icon: const Icon(Icons.arrow_back, color: Colors.white),
                           ),
                           const SizedBox(width: 10),
                           const Expanded(
@@ -931,7 +895,7 @@ class _StoryCustomizationPageState extends State<StoryCustomizationPage> with Si
                       ),
                       const SizedBox(height: 10),
                       const Text(
-                        'قم بتخصيص القصة وجعلها أكثر متعة وتشويقاً',
+                        'قم بتخصيص القصة لجعلها أكثر متعة وتشويقاً',
                         style: TextStyle(
                           fontSize: 14,
                           color: Colors.white,
@@ -953,7 +917,7 @@ class _StoryCustomizationPageState extends State<StoryCustomizationPage> with Si
                     _currentPage = index;
                   });
                 },
-                physics: _isGeneratingStory ? const NeverScrollableScrollPhysics() : const ClampingScrollPhysics(),
+                physics: const NeverScrollableScrollPhysics(),
                 itemCount: _customizationQuestions.length,
                 itemBuilder: (context, index) {
                   return _buildQuestionPage(index);

@@ -8,7 +8,6 @@ import 'package:hikaya_heroes/pages/story_result_page.dart';
 
 import '../models/user_model.dart';
 import '../services/firebase_service.dart';
-import 'story_customization_page_old.dart';
 
 class ChooseStoryPage extends StatefulWidget {
   final Story story;
@@ -98,23 +97,18 @@ class _ChooseStoryPageState extends State<ChooseStoryPage> with SingleTickerProv
     }
   }
 
-  Future<void> _toggleBookmark(bool isBookmarked) async {
+  Future<void> _toggleBookmark(String removeBookmark) async {
     try {
-      if (isBookmarked) {
-        await _firebaseService.addBookmark(widget.story.id);
+
+        await _firebaseService.removeBookmark(removeBookmark);
         if (mounted) {
           setState(() {
-            _user?.bookMarks?.add(widget.story.id);
+            _user?.bookMarks.remove(removeBookmark);
           });
         }
-      } else {
-        await _firebaseService.removeBookmark(widget.story.id);
-        if (mounted) {
-          setState(() {
-            _user?.bookMarks?.remove(widget.story.id);
-          });
-        }
-      }
+
+      Navigator.pop(context);
+
     } catch (e) {
       print("Error toggling bookmark: $e");
       _showErrorSnackBar('فشل في تحديث المحفوظات');
@@ -259,8 +253,8 @@ class _ChooseStoryPageState extends State<ChooseStoryPage> with SingleTickerProv
                         child: const Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(Icons.person_search_rounded, size: 20),
-                            SizedBox(width: 8),
+                            Icon(Icons.person_search_rounded, size: 2),
+                            SizedBox(width: 2),
                             Text(
                               'تخصيص القصة',
                               style: TextStyle(
@@ -286,7 +280,7 @@ class _ChooseStoryPageState extends State<ChooseStoryPage> with SingleTickerProv
     Navigator.push(
       context,
       PageRouteBuilder(
-        pageBuilder: (context, animation, secondaryAnimation) => StoryCustomizationPageOld(
+        pageBuilder: (context, animation, secondaryAnimation) => StoryCustomizationPage(
           storyId: widget.story.id,
           gender: widget.gender,
           onCustomizationComplete: (customization) {

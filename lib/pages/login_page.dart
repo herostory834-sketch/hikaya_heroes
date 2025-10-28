@@ -1,7 +1,6 @@
 // pages/login_page.dart
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:hikaya_heroes/pages/admin_dashboard.dart';
 import 'package:hikaya_heroes/services/firebase_service.dart';
 import 'package:hikaya_heroes/widgets/reusable_widgets.dart';
 import 'package:hikaya_heroes/pages/home_page.dart';
@@ -15,7 +14,7 @@ class LoginPage extends StatefulWidget {
   State<LoginPage> createState() => _LoginPageState();
 }
 
-class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMixin {
+class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
 
@@ -126,29 +125,7 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
       // Success animation before navigation
       await _playSuccessAnimation();
       if (user != null) {
-        bool isAdmin = await _firebaseService.isAdmin(user.uid);
 
-        if (isAdmin) {
-          Navigator.pushReplacement(
-            context,
-            PageRouteBuilder(
-              pageBuilder: (context, animation, secondaryAnimation) => const AdminDashboard(),
-              transitionsBuilder: (context, animation, secondaryAnimation, child) {
-                return FadeTransition(
-                  opacity: animation,
-                  child: ScaleTransition(
-                    scale: Tween<double>(begin: 1.1, end: 1.0).animate(
-                      CurvedAnimation(parent: animation, curve: Curves.easeOut),
-                    ),
-                    child: child,
-                  ),
-                );
-              },
-              transitionDuration: const Duration(milliseconds: 800),
-            ),
-          );
-
-        } else {
           Navigator.pushReplacement(
             context,
             PageRouteBuilder(
@@ -168,7 +145,7 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
             ),
           );
 
-        }
+
       }
     } on FirebaseAuthException catch (e) {
       await _playErrorAnimation();

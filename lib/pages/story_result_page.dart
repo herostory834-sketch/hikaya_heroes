@@ -1,5 +1,6 @@
 // pages/story_result_page.dart
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:hikaya_heroes/models/story.dart';
@@ -207,11 +208,26 @@ class _StoryResultPageState extends State<StoryResultPage> with SingleTickerProv
         widget.customization!.childImage == null ||
         widget.customization!.childImage!.isEmpty) {
       return _buildImageContainer(
-          Image.asset(
-           widget.gender?'assets/images/boy.png': 'assets/images/girl.png',
-            fit: BoxFit.contain,
-          ),
-          'الصورة الافتراضية'
+          widget.story.photo == 'photo' ? Image.asset(
+            widget.gender ? 'assets/images/happy.png' : 'assets/images/happy.png',
+            width: double.infinity,
+            height: double.infinity,
+            fit: BoxFit.cover,
+          ):Image.file(
+            File(widget.story.photo),
+            // width: 80,
+            //   height: 80,
+            fit: BoxFit.cover,
+            errorBuilder: (context, error, stackTrace) {
+              return Image.asset(
+                widget.gender ? 'assets/images/happy.png' : 'assets/images/happy.png',
+                width: double.infinity,
+                height: double.infinity,
+                fit: BoxFit.cover,
+              );
+            },
+          )
+          , widget.story.photo == 'photo' ? 'الصورة الافتراضية' : 'الصورة المحددة'
       );
     }
 

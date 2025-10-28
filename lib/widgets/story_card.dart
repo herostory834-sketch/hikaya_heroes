@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:hikaya_heroes/models/story.dart';
 import 'package:hikaya_heroes/utils/constants.dart';
@@ -7,7 +9,7 @@ class StoryCard extends StatelessWidget {
   final bool gender;
   final VoidCallback onTap;
   final bool showBookmarkIcon;
-  final Function(bool) onBookmarkTap;
+  final Function(String) onBookmarkTap;
   final bool isBookmarked;
 
   const StoryCard({
@@ -43,12 +45,26 @@ class StoryCard extends StatelessWidget {
               child: Stack(
                 children: [
                   // Background Character Image
-                  Image.asset(
-                    gender ? 'assets/images/boy.png' : 'assets/images/girl.png',
+                 story.photo == 'photo' ? Image.asset(
+                    gender ? 'assets/images/happy.png' : 'assets/images/happy.png',
                     width: double.infinity,
                     height: double.infinity,
                     fit: BoxFit.cover,
-                  ),
+                  ):Image.file(
+                   File(story.photo),
+                  // width: 80,
+                //   height: 80,
+                   fit: BoxFit.cover,
+                   errorBuilder: (context, error, stackTrace) {
+                     return Image.asset(
+                       gender ? 'assets/images/happy.png' : 'assets/images/happy.png',
+                       width: double.infinity,
+                       height: double.infinity,
+                       fit: BoxFit.cover,
+                     );
+                   },
+                 )
+                      ,
 
                   // Gradient Overlay for better text readability
                   Container(
@@ -145,7 +161,7 @@ class StoryCard extends StatelessWidget {
                 top: 8,
                 right: 8,
                 child: GestureDetector(
-                  onTap: () => onBookmarkTap(!isBookmarked),
+                  onTap: () => onBookmarkTap(story.id),
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 300),
                     padding: const EdgeInsets.all(6),

@@ -74,16 +74,13 @@ class FirebaseService {
 
   // Sign in user
   Future<User?> signIn(String email, String password) async {
-    try {
+
       UserCredential result = await _auth.signInWithEmailAndPassword(
         email: email,
         password: password,
       );
       return result.user;
-    } catch (e) {
-      print("Error signing in: $e");
-      return null;
-    }
+
   }
 
   // Check if user is admin
@@ -134,7 +131,17 @@ class FirebaseService {
       rethrow;
     }
   }
+  Future<String?> addCustomizeStory(Story story) async {
+    try {
+      final docRef = await _firestore.collection('bookMarks').add(story.toMap());
 
+     await addBookmark(docRef.id);
+      return docRef.id;
+    } catch (e) {
+      print("Error adding story: $e");
+      rethrow;
+    }
+  }
   // Update story in Firestore
   Future<void> updateStory(String storyId, Story story) async {
     try {
@@ -180,6 +187,18 @@ class FirebaseService {
   Future<Story?> getStoryById(String storyId) async {
     try {
       DocumentSnapshot doc = await _firestore.collection('stories').doc(storyId).get();
+      if (doc.exists) {
+        return Story.fromFirestore(doc);
+      }
+      return null;
+    } catch (e) {
+      print("Error getting story by ID: $e");
+      return null;
+    }
+  }
+  Future<Story?> getBookMarkById(String storyId) async {
+    try {
+      DocumentSnapshot doc = await _firestore.collection('bookMarks').doc(storyId).get();
       if (doc.exists) {
         return Story.fromFirestore(doc);
       }
@@ -302,7 +321,7 @@ class FirebaseService {
 
   Future<List<Story>> getUserBookmarks() async {
     final user = _auth.currentUser;
-    if (user != null) {
+     if (user != null) {
       final querySnapshot = await _firestore
           .collection('users')
           .doc(user.uid)
@@ -314,7 +333,7 @@ class FirebaseService {
       for (var doc in querySnapshot.docs) {
         final storyId = doc['storyId'];
         if (storyId != null) {
-          final story = await getStoryById(storyId);
+          final story = await getBookMarkById(storyId);
           if (story != null) {
             bookmarks.add(story);
           }
